@@ -5,6 +5,16 @@ def NAMESPACE = "gan-jenkins"
 def DOCKERFILE = "./config/Dockerfile"
 def SERVICE_ACCOUNT_NAME = "jenkins"
 
+
+def buildAgentName(String jobNameWithNamespace, String buildNumber, String namespace) {
+    def jobName = removeNamespaceFromJobName(jobNameWithNamespace, namespace);
+
+    if (jobName.length() > 52) {
+        jobName = jobName.substring(0, 52);
+    }
+
+    return "a.${jobName}${buildNumber}".replace('_', '-').replace('/', '-').replace('-.', '.');
+}
 def buildLabel = buildAgentName(env.JOB_NAME, env.BUILD_NUMBER, env.NAMESPACE);
 def cloudName = env.CLOUD_NAME == "openshift" ? "openshift" : "kubernetes"
 def workingDir = "/home/jenkins/agent"

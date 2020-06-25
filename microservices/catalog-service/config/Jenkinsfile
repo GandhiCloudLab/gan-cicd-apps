@@ -1,0 +1,103 @@
+gandhicloudlab/servicediscovery-catalog:latest
+
+def APP_NAME = "catalog-service"
+def APP_IMAGE = "docker.io/gandhicloudlab/gan-cicd-catalog:latest"
+def REGISTRY_URL = "docker.io/gandhicloudlab"
+def NAMESPACE = "gan-jenkins"
+def DOCKERFILE = "./config/Dockerfile"
+def SERVICE_ACCOUNT_NAME = "jenkins"
+
+def buildLabel = buildAgentName(env.JOB_NAME, env.BUILD_NUMBER, env.NAMESPACE);
+def cloudName = env.CLOUD_NAME == "openshift" ? "openshift" : "kubernetes"
+def workingDir = "/home/jenkins/agent"
+
+println "Job name: ${env.JOB_NAME}"
+println "NAMESPACE: ${env.NAMESPACE}"
+println "CLOUD_NAME: ${env.CLOUD_NAME}"
+println "buildLabel: ${env.buildLabel}"
+
+podTemplate(
+   label: buildLabel,
+   cloud: cloudName,
+   yaml: """
+apiVersion: v1
+kind: Pod
+spec:
+  serviceAccountName: ${SERVICE_ACCOUNT_NAME}
+  volumes:
+    - emptyDir: {}
+      name: varlibcontainers
+  containers:
+    - name: jdk11
+      image: jenkins/slave:latest-jdk11
+      tty: true
+      command: ["/bin/bash"]
+      workingDir: ${workingDir}
+      env:
+        - name: HOME
+          value: ${workingDir}
+    - name: buildah
+      image: quay.io/buildah/stable:v1.9.0
+      tty: true
+      command: ["/bin/bash"]
+      workingDir: ${workingDir}
+      securityContext:
+        privileged: true
+      env:
+        - name: HOME
+          value: /home/devops
+        - name: ENVIRONMENT_NAME
+          value: ${env.NAMESPACE}
+        - name: REGISTRY_USER
+          valueFrom:
+            secretKeyRef:
+              key: registry-user
+              name: gan-jenkins-secret
+              optional: true
+        - name: REGISTRY_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: registry-password
+              name: gan-jenkins-secret
+              optional: true
+      volumeMounts:
+        - mountPath: /var/lib/containers
+          name: varlibcontainers
+"""
+) {
+    node(buildLabel) {
+        container(name: 'jdk11', shell: '/bin/bash') {
+            checkout scm
+            stage('Build') {
+                sh '''
+                    cp -r catalog-service/* ./"
+                    mvn package
+                    echo "Build Completed ...."
+                '''
+            }
+            stage('Test') {
+                sh '''#!/bin/bash
+                    mvn test
+                    echo "Test Completed ...."
+                '''
+            }
+        }
+        container(name: 'buildah', shell: '/bin/bash') {
+            stage('Build image') {
+                sh '''#!/bin/bash
+                    set -e
+                    . ./env-config
+
+                echo "Image... $APP_IMAGE"
+                buildah bud --tls-verify=false --format=docker -f ${DOCKERFILE} -t ${APP_IMAGE} .
+
+                if [[ -n "${REGISTRY_USER}" ]] && [[ -n "${REGISTRY_PASSWORD}" ]]; then
+                    buildah login -u "${REGISTRY_USER}" -p "${REGISTRY_PASSWORD}" "${REGISTRY_URL}"
+                fi
+
+                buildah push --tls-verify=false "${APP_IMAGE}" "docker://${APP_IMAGE}"
+                '''
+            }
+        }
+    }
+}

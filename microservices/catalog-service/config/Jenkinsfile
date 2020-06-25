@@ -5,7 +5,6 @@ def NAMESPACE = "gan-jenkins"
 def DOCKERFILE = "./config/Dockerfile"
 def SERVICE_ACCOUNT_NAME = "jenkins"
 
-
 def buildAgentName(String jobNameWithNamespace, String buildNumber, String namespace) {
     def jobName = removeNamespaceFromJobName(jobNameWithNamespace, namespace);
 

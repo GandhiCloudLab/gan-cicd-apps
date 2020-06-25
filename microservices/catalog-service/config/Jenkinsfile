@@ -1,5 +1,3 @@
-gandhicloudlab/servicediscovery-catalog:latest
-
 def APP_NAME = "catalog-service"
 def APP_IMAGE = "docker.io/gandhicloudlab/gan-cicd-catalog:latest"
 def REGISTRY_URL = "docker.io/gandhicloudlab"
